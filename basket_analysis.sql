@@ -124,15 +124,15 @@ create table tmp_eag.basket_analysis
     , ItemID___1 int(11)
     , BrandID___2 int(11)
     , ItemID___2 int(11)
-    , resp_count_total int(11) default 0
-    , resp_count___1 int(11) default 0
-    , resp_count_pct___1 decimal(19,6) default 0
-    , resp_count___2 int(11) default 0
-    , resp_count_pct___2 decimal(19,6) default 0
+    , transaction_count_total int(11) default 0
+    , transaction_count___1 int(11) default 0
+    , transaction_pct___1 decimal(19,6) default 0
+    , transaction_count___2 int(11) default 0
+    , transaction_pct___2 decimal(19,6) default 0
     , transaction_count int(11) default 0
-    , resp_count_pct___1_2 decimal(19,6) default 0
-    , confidence___2_1 decimal(19,6) default 0
-    , confidence___1_2 decimal(19,6) default 0
+    , transaction_pct___1_2 decimal(19,6) default 0
+    , confidence___2_if_1 decimal(19,6) default 0
+    , confidence___1_if_2 decimal(19,6) default 0
     , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
     , index idx_op1(BrandID___1, ItemID___1)
     , index idx_op2 (BrandID___2, ItemID___2)
@@ -148,47 +148,47 @@ from tmp_eag.product_combination_transactions;
 
 update tmp_eag.basket_analysis as a,
 (
-	select BrandID, ItemID, count(TransactionID) as resp_count___1
+	select BrandID, ItemID, count(TransactionID) as transaction_count___1
 	from tmp_eag.transactions
     group by BrandID, ItemID
 ) as b
-set a.resp_count___1 = b.resp_count___1
+set a.transaction_count___1 = b.transaction_count___1
 where a.ItemID___1 = b.ItemID
 	and a.BrandID___1 = b.BrandID;
 
 update tmp_eag.basket_analysis as a,
 (
-	select BrandID, ItemID, count(TransactionID) as resp_count___2
+	select BrandID, ItemID, count(TransactionID) as transaction_count___2
 	from tmp_eag.transactions
     group by BrandID, ItemID
 ) as b
-set a.resp_count___2 = b.resp_count___2
+set a.transaction_count___2 = b.transaction_count___2
 where a.ItemID___2 = b.ItemID
 	and a.BrandID___2 = b.BrandID;
 
 update tmp_eag.basket_analysis as a,
 (
-	select count(distinct TransactionID) as resp_count_total
+	select count(distinct TransactionID) as transaction_count_total
 	from tmp_eag.transactions
 ) as b
-set a.resp_count_total = b.resp_count_total;
+set a.transaction_count_total = b.transaction_count_total;
 
 update tmp_eag.basket_analysis
-set resp_count_pct___1 = resp_count___1/resp_count_total * 100;
+set transaction_pct___1 = transaction_count___1/transaction_count_total * 100;
 
 update tmp_eag.basket_analysis
-set resp_count_pct___2 = resp_count___2/resp_count_total * 100;
+set transaction_pct___2 = transaction_count___2/transaction_count_total * 100;
 
 update tmp_eag.basket_analysis
-set resp_count_pct___1_2 = transaction_count/resp_count_total * 100;
+set transaction_pct___1_2 = transaction_count/transaction_count_total * 100;
 
 -- P(ItemID___2 | ItemID___1)
 update tmp_eag.basket_analysis
-set confidence___2_1 = resp_count_pct___1_2 / resp_count_pct___1;
+set confidence___2_if_1 = transaction_pct___1_2 / transaction_pct___1;
 
 -- P(ItemID___1 | ItemID___2)
 update tmp_eag.basket_analysis
-set confidence___1_2 = resp_count_pct___1_2 / resp_count_pct___2;
+set confidence___1_if_2 = transaction_pct___1_2 / transaction_pct___2;
 
 
 drop table if exists tmp_eag.basket_analysis_lbls;
@@ -197,16 +197,16 @@ create table tmp_eag.basket_analysis_lbls
 	Month int(11) default 202301
     , Outlet int(11) default 13
     , BrandID___1 int(11)
-    , lbl_BrandID___1 varchar(64)
+    , Brand_lbl___1 varchar(64)
     , ItemID___1 int(11)
-    , lbl_ItemID___1 varchar(64)
+    , ItemID_lbl___1 varchar(64)
     , BrandID___2 int(11)
-    , lbl_BrandID___2 varchar(64)
+    , Brand_lbl___2 varchar(64)
     , ItemID___2 int(11)
-    , lbl_ItemID___2 varchar(64)
-    , resp_count_pct___1_2 decimal(6,3) default 0
-    , confidence___2_1 decimal(6,3) default 0
-    , confidence___1_2 decimal(6,3) default 0
+    , ItemID_lbl___2 varchar(64)
+    , transaction_pct___1_2 decimal(6,3) default 0
+    , confidence___2_if_1 decimal(6,3) default 0
+    , confidence___1_if_2 decimal(6,3) default 0
     , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
     , index idx_op1(BrandID___1, ItemID___1)
     , index idx_op2 (BrandID___2, ItemID___2)
@@ -216,34 +216,34 @@ create table tmp_eag.basket_analysis_lbls
     , index idx_o2(BrandID___2)
 );
 
-insert into tmp_eag.basket_analysis_lbls(BrandID___1, ItemID___1, BrandID___2, ItemID___2, resp_count_pct___1_2, confidence___2_1, confidence___1_2)
-select BrandID___1, ItemID___1, BrandID___2, ItemID___2, resp_count_pct___1_2, confidence___2_1, confidence___1_2
+insert into tmp_eag.basket_analysis_lbls(BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_pct___1_2, confidence___2_if_1, confidence___1_if_2)
+select BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_pct___1_2, confidence___2_if_1, confidence___1_if_2
 from tmp_eag.basket_analysis;
 
 update tmp_eag.basket_analysis_lbls as a, (
-	select FormatValue as ItemID___1, FormatLabel as lbl_ItemID___1
+	select FormatValue as ItemID___1, FormatLabel as ItemID_lbl___1
 	from tq_admin.vw_formats where FormatID = 109
 ) as b
-set a.lbl_ItemID___1 = b.lbl_ItemID___1
+set a.ItemID_lbl___1 = b.ItemID_lbl___1
 where a.ItemID___1=b.ItemID___1;
 
 update tmp_eag.basket_analysis_lbls as a, (
-	select FormatValue as ItemID___2, FormatLabel as lbl_ItemID___2
+	select FormatValue as ItemID___2, FormatLabel as ItemID_lbl___2
 	from tq_admin.vw_formats where FormatID = 109
 ) as b
-set a.lbl_ItemID___2 = b.lbl_ItemID___2
+set a.ItemID_lbl___2 = b.ItemID_lbl___2
 where a.ItemID___2=b.ItemID___2;
 
 update tmp_eag.basket_analysis_lbls as a, (
-	select FormatValue as BrandID___1, FormatLabel as lbl_BrandID___1
+	select FormatValue as BrandID___1, FormatLabel as Brand_lbl___1
 	from tq_admin.vw_formats where FormatID = 1298
 ) as b
-set a.lbl_BrandID___1 = b.lbl_BrandID___1
+set a.Brand_lbl___1 = b.Brand_lbl___1
 where a.BrandID___1=b.BrandID___1;
 
 update tmp_eag.basket_analysis_lbls as a, (
-	select FormatValue as BrandID___2, FormatLabel as lbl_BrandID___2
+	select FormatValue as BrandID___2, FormatLabel as Brand_lbl___2
 	from tq_admin.vw_formats where FormatID = 1298
 ) as b
-set a.lbl_BrandID___2 = b.lbl_BrandID___2
+set a.Brand_lbl___2 = b.Brand_lbl___2
 where a.BrandID___2=b.BrandID___2;

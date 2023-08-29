@@ -1,258 +1,249 @@
--- basket analysis for home depot
-drop table if exists tmp_eag.us_allpurch_13;
-create table tmp_eag.us_allpurch_13(
-	Period int(11)
-    , RespondentID bigint(20)
-    , Outlet int(11)
-    , ProductID int(11)
-    , Brand int(11)
-    , quantity int(11) default 0
-    , primary key (Period, RespondentID, ProductID)
-    , index idx_pbr(ProductID, Brand, RespondentID)
-    , index idx_pb(Brand, ProductID)
-    , index idx_b(Brand)
-    , index idx_r(RespondentID)
-    , index idx_pr(ProductID));
+-- Eliza Geswein
+-- 08/2023
 
-insert into tmp_eag.us_allpurch_13(Period, RespondentID, Outlet, ProductID, Brand, quantity)
-select Period, RespondentID, Outlet, ProductID, br, quantity
-from us_allpurch.allpurch_202301
-where Outlet=13
- and br is not null and br not in (998, 999);
+/*
+performs market basket analysis on sample store transaction database (src: https://www.kaggle.com/datasets/iamprateek/store-transaction-data)
 
-select * from tmp_eag.us_allpurch_13
-select ProductID, Brand from tmp_eag.us_allpurch_13 group by ProductID, Brand;
-optimize local table tmp_eag.us_allpurch_13;
+*/
 
-drop table if exists tmp_eag.allpurch_13_products_combined;
-create table tmp_eag.allpurch_13_products_combined
+drop table if exists tmp_eag.transactions;
+create table tmp_eag.transactions(
+	Month int(11)
+    , TransactionID bigint(20)
+    , ItemID int(11)
+    , BrandID int(11)
+    , Qty int(11) default 0
+    , primary key (Month, TransactionID, ItemID)
+    , index idx_ibt(ItemID, BrandID, TransactionID)
+    , index idx_bi(BrandID, ItemID)
+    , index idx_b(BrandID)
+    , index idx_t(TransactionID)
+    , index idx_i(ItemID));
+
+insert into tmp_eag.transactions(Month, TransactionID, Outlet, ItemID, BrandID, Qty)
+;
+
+optimize local table tmp_eag.transactions;
+
+drop table if exists tmp_eag.product_combinations;
+create table tmp_eag.product_combinations
 (
-	Period int(11) default 202301
-	, Outlet int(11) default 13
-    , Brand___1 int(11)
-    , ProductID___1 int(11)
-    , Brand___2 int(11)
-    , ProductID___2 int(11)
-    , primary key (Brand___1, ProductID___1, Brand___2, ProductID___2)
-    , index idx_bpbp(Brand___1, ProductID___1, Brand___2, ProductID___2)
-    , index idx_p1(ProductID___1)
-    , index idx_p2(ProductID___2)
-    , index idx_b1(Brand___1)
-    , index idx_b2(Brand___2)
+Month int(11)
+    , BrandID___1 int(11)
+    , ItemID___1 int(11)
+    , BrandID___2 int(11)
+    , ItemID___2 int(11)
+    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
+    , index idx_bi1bi2(BrandID___1, ItemID___1, BrandID___2, ItemID___2)
+    , index idx_i1(ItemID___1)
+    , index idx_i2(ItemID___2)
+    , index idx_b1(BrandID___1)
+    , index idx_b2(BrandID___2)
 );
 
 -- takes 160 seconds
-insert into tmp_eag.allpurch_13_products_combined(Brand___1, ProductID___1, Brand___2, ProductID___2)
-select a.Brand, a.ProductID as ProductID___1, b.Brand, b.ProductID as ProductID___2
+insert into tmp_eag.product_combinations(BrandID___1, ItemID___1, BrandID___2, ItemID___2)
+select a.BrandID, a.ItemID as ItemID___1, b.BrandID, b.ItemID as ItemID___2
 from
 (
-	select ProductID, Brand
-	from tmp_eag.us_allpurch_13
-    group by ProductID, Brand
+	select ItemID, BrandID
+	from tmp_eag.transactions
+    	group by ItemID, BrandID
 ) as a cross join
 (
-	select ProductID, Brand
-	from tmp_eag.us_allpurch_13
-    group by ProductID, Brand
+	select ItemID, BrandID
+	from tmp_eag.transactions
+    	group by ItemID, BrandID
 ) as b
-group by a.ProductID, a.Brand, b.ProductID, b.Brand;
+group by a.ItemID, a.BrandID, b.ItemID, b.BrandID;
 
-delete from tmp_eag.allpurch_13_products_combined
-where Brand___1=Brand___2 and ProductID___1=ProductID___2;
+-- remove duplicate combinations
+delete from tmp_eag.product_combinations
+where BrandID___1=BrandID___2 and ItemID___1=ItemID___2;
 
-optimize local table tmp_eag.allpurch_13_products_combined;
+optimize local table tmp_eag.product_combinations;
 
-drop table if exists tmp_eag.bby_allpurch_202301_product_combinations_nodup;
-create table tmp_eag.bby_allpurch_202301_product_combinations_nodup
+
+drop table if exists tmp_eag.product_combinations_nodups;
+create table tmp_eag.product_combinations_nodups
 (
-    Outlet int(11) default 13
-    , Brand___1 int(11)
-    , ProductID___1 int(11)
-    , Brand___2 int(11)
-    , ProductID___2 int(11)
-    , primary key (Brand___1, ProductID___1, Brand___2, ProductID___2)
-    , index idx_oone (Brand___1)
-    , index idx_otwo (Brand___2)
-    , index idx_pone (ProductID___1)
-    , index idx_ptwo (ProductID___2)
-    , index idx_oopp (Brand___1, ProductID___1, Brand___2, ProductID___2)
+    BrandID___1 int(11)
+    , ItemID___1 int(11)
+    , BrandID___2 int(11)
+    , ItemID___2 int(11)
+    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
+    , index idx_oone (BrandID___1)
+    , index idx_otwo (BrandID___2)
+    , index idx_pone (ItemID___1)
+    , index idx_ptwo (ItemID___2)
+    , index idx_oopp (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
 );
 
-insert into tmp_eag.bby_allpurch_202301_product_combinations_nodup(Brand___1, ProductID___1, Brand___2, ProductID___2)
-select (case when Brand___1 < Brand___2 then Brand___1 else Brand___2 end) as Brand_min,
-	(case when ProductID___1 < ProductID___2 then ProductID___1 else ProductID___2 end) as ProductID_min,
-    (case when Brand___1 > Brand___2 then Brand___1 else Brand___2 end) as Brand_max,
-    (case when ProductID___1 > ProductID___2 then ProductID___1 else ProductID___2 end) as ProductID_max
-from tmp_eag.allpurch_13_products_combined
-group by Brand_min, ProductID_min, Brand_max, ProductID_max;
+insert into tmp_eag.product_combinations_nodups(BrandID___1, ItemID___1, BrandID___2, ItemID___2)
+select (case when BrandID___1 < BrandID___2 then BrandID___1 else BrandID___2 end) as BrandID_min,
+	(case when ItemID___1 < ItemID___2 then ItemID___1 else ItemID___2 end) as ItemID_min,
+    (case when BrandID___1 > BrandID___2 then BrandID___1 else BrandID___2 end) as BrandID_max,
+    (case when ItemID___1 > ItemID___2 then ItemID___1 else ItemID___2 end) as ItemID_max
+from tmp_eag.product_combinations
+group by BrandID_min, ItemID_min, BrandID_max, ItemID_max;
 
-optimize local table tmp_eag.bby_allpurch_202301_product_combinations_nodup;
+optimize local table tmp_eag.product_combinations_nodups;
 
 
 -- group by 1, 2, get count, divide by transaction total
-drop table if exists tmp_eag.bby_resp_by_brand_product___1_2;
-create table tmp_eag.bby_resp_by_brand_product___1_2
+drop table if exists tmp_eag.product_combination_transactions;
+create table tmp_eag.product_combination_transactions
 (
-	Outlet int(11) default 13
-    , Brand___1 int(11)
-    , ProductID___1 int(11)
-    , Brand___2 int(11)
-    , ProductID___2 int(11)
-    , resp_count___1_2 bigint(20)
-    , primary key (Brand___1, ProductID___1, Brand___2, ProductID___2)
+    BrandID___1 int(11)
+    , ItemID___1 int(11)
+    , BrandID___2 int(11)
+    , ItemID___2 int(11)
+    , transaction_count int(11)
+    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
 );
 
-insert into tmp_eag.bby_resp_by_brand_product___1_2(Brand___1, ProductID___1, Brand___2, ProductID___2, resp_count___1_2)
-select a.Brand, a.ProductID, b.Brand, b.ProductID, count(a.RespondentID)
-from tmp_eag.us_allpurch_13 as a, 
-tmp_eag.us_allpurch_13 as b, 
-tmp_eag.bby_allpurch_202301_product_combinations_nodup as c
-where a.RespondentID=b.RespondentID
-	and a.Brand=c.Brand___1
-    and a.ProductID=c.ProductID___1
-    and b.Brand=c.Brand___2
-    and b.ProductID=c.ProductID___2
-group by a.Brand, a.ProductID, b.Brand, b.ProductID;
+insert into tmp_eag.product_combination_transactions(BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_count)
+select a.BrandID, a.ItemID, b.BrandID, b.ItemID, count(a.TransactionID)
+from tmp_eag.transactions as a, 
+tmp_eag.transactions as b, 
+tmp_eag.product_combinations_nodups as c
+where a.TransactionID=b.TransactionID
+    and a.BrandID=c.BrandID___1
+    and a.ItemID=c.ItemID___1
+    and b.BrandID=c.BrandID___2
+    and b.ItemID=c.ItemID___2
+group by a.BrandID, a.ItemID, b.BrandID, b.ItemID;
 
 
-
--- test for dups
--- no dups
-select * from tmp_eag.bby_resp_by_brand_product___1_2
-where (Brand___1=10 and ProductID___1=1) and (Brand___2=872 and ProductID___2=960)
-or (Brand___2=10 and ProductID___2=1) and (Brand___1=872 and ProductID___1=960);
-
-
-
-drop table if exists tmp_eag.bby_allpurch_202301_basket_analysis;
-create table tmp_eag.bby_allpurch_202301_basket_analysis
+drop table if exists tmp_eag.basket_analysis;
+create table tmp_eag.basket_analysis
 (
-	Period int(11) default 202301
+	Month int(11) default 202301
     , Outlet int(11) default 13
-    , Brand___1 int(11)
-    , ProductID___1 int(11)
-    , Brand___2 int(11)
-    , ProductID___2 int(11)
+    , BrandID___1 int(11)
+    , ItemID___1 int(11)
+    , BrandID___2 int(11)
+    , ItemID___2 int(11)
     , resp_count_total int(11) default 0
     , resp_count___1 int(11) default 0
     , resp_count_pct___1 decimal(19,6) default 0
     , resp_count___2 int(11) default 0
     , resp_count_pct___2 decimal(19,6) default 0
-    , resp_count___1_2 int(11) default 0
+    , transaction_count int(11) default 0
     , resp_count_pct___1_2 decimal(19,6) default 0
     , confidence___2_1 decimal(19,6) default 0
     , confidence___1_2 decimal(19,6) default 0
-    , primary key (Brand___1, ProductID___1, Brand___2, ProductID___2)
-    , index idx_op1(Brand___1, ProductID___1)
-    , index idx_op2 (Brand___2, ProductID___2)
-    , index idx_p1(ProductID___1)
-    , index idx_p2(ProductID___2)
-    , index idx_o1(Brand___1)
-    , index idx_o2(Brand___2)
+    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
+    , index idx_op1(BrandID___1, ItemID___1)
+    , index idx_op2 (BrandID___2, ItemID___2)
+    , index idx_p1(ItemID___1)
+    , index idx_p2(ItemID___2)
+    , index idx_o1(BrandID___1)
+    , index idx_o2(BrandID___2)
 );
     
-insert into tmp_eag.bby_allpurch_202301_basket_analysis(Brand___1, ProductID___1, Brand___2, ProductID___2, resp_count___1_2)
-select Brand___1, ProductID___1, Brand___2, ProductID___2, resp_count___1_2
-from tmp_eag.bby_resp_by_brand_product___1_2;
+insert into tmp_eag.basket_analysis(BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_count)
+select BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_count
+from tmp_eag.product_combination_transactions;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis as a,
+update tmp_eag.basket_analysis as a,
 (
-	select Brand, ProductID, count(RespondentID) as resp_count___1
-	from tmp_eag.us_allpurch_13
-    group by Brand, ProductID
+	select BrandID, ItemID, count(TransactionID) as resp_count___1
+	from tmp_eag.transactions
+    group by BrandID, ItemID
 ) as b
 set a.resp_count___1 = b.resp_count___1
-where a.ProductID___1 = b.ProductID
-	and a.Brand___1 = b.Brand;
+where a.ItemID___1 = b.ItemID
+	and a.BrandID___1 = b.BrandID;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis as a,
+update tmp_eag.basket_analysis as a,
 (
-	select Brand, ProductID, count(RespondentID) as resp_count___2
-	from tmp_eag.us_allpurch_13
-    group by Brand, ProductID
+	select BrandID, ItemID, count(TransactionID) as resp_count___2
+	from tmp_eag.transactions
+    group by BrandID, ItemID
 ) as b
 set a.resp_count___2 = b.resp_count___2
-where a.ProductID___2 = b.ProductID
-	and a.Brand___2 = b.Brand;
+where a.ItemID___2 = b.ItemID
+	and a.BrandID___2 = b.BrandID;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis as a,
+update tmp_eag.basket_analysis as a,
 (
-	select count(distinct RespondentID) as resp_count_total
-	from tmp_eag.us_allpurch_13
+	select count(distinct TransactionID) as resp_count_total
+	from tmp_eag.transactions
 ) as b
 set a.resp_count_total = b.resp_count_total;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis
+update tmp_eag.basket_analysis
 set resp_count_pct___1 = resp_count___1/resp_count_total * 100;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis
+update tmp_eag.basket_analysis
 set resp_count_pct___2 = resp_count___2/resp_count_total * 100;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis
-set resp_count_pct___1_2 = resp_count___1_2/resp_count_total * 100;
+update tmp_eag.basket_analysis
+set resp_count_pct___1_2 = transaction_count/resp_count_total * 100;
 
--- P(ProductID___2 | ProductID___1)
-update tmp_eag.bby_allpurch_202301_basket_analysis
+-- P(ItemID___2 | ItemID___1)
+update tmp_eag.basket_analysis
 set confidence___2_1 = resp_count_pct___1_2 / resp_count_pct___1;
 
--- P(ProductID___1 | ProductID___2)
-update tmp_eag.bby_allpurch_202301_basket_analysis
+-- P(ItemID___1 | ItemID___2)
+update tmp_eag.basket_analysis
 set confidence___1_2 = resp_count_pct___1_2 / resp_count_pct___2;
 
 
-drop table if exists tmp_eag.bby_allpurch_202301_basket_analysis_lbl;
-create table tmp_eag.bby_allpurch_202301_basket_analysis_lbl
+drop table if exists tmp_eag.basket_analysis_lbls;
+create table tmp_eag.basket_analysis_lbls
 (
-	Period int(11) default 202301
+	Month int(11) default 202301
     , Outlet int(11) default 13
-    , Brand___1 int(11)
-    , lbl_Brand___1 varchar(64)
-    , ProductID___1 int(11)
-    , lbl_ProductID___1 varchar(64)
-    , Brand___2 int(11)
-    , lbl_Brand___2 varchar(64)
-    , ProductID___2 int(11)
-    , lbl_ProductID___2 varchar(64)
+    , BrandID___1 int(11)
+    , lbl_BrandID___1 varchar(64)
+    , ItemID___1 int(11)
+    , lbl_ItemID___1 varchar(64)
+    , BrandID___2 int(11)
+    , lbl_BrandID___2 varchar(64)
+    , ItemID___2 int(11)
+    , lbl_ItemID___2 varchar(64)
     , resp_count_pct___1_2 decimal(6,3) default 0
     , confidence___2_1 decimal(6,3) default 0
     , confidence___1_2 decimal(6,3) default 0
-    , primary key (Brand___1, ProductID___1, Brand___2, ProductID___2)
-    , index idx_op1(Brand___1, ProductID___1)
-    , index idx_op2 (Brand___2, ProductID___2)
-    , index idx_p1(ProductID___1)
-    , index idx_p2(ProductID___2)
-    , index idx_o1(Brand___1)
-    , index idx_o2(Brand___2)
+    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
+    , index idx_op1(BrandID___1, ItemID___1)
+    , index idx_op2 (BrandID___2, ItemID___2)
+    , index idx_p1(ItemID___1)
+    , index idx_p2(ItemID___2)
+    , index idx_o1(BrandID___1)
+    , index idx_o2(BrandID___2)
 );
 
-insert into tmp_eag.bby_allpurch_202301_basket_analysis_lbl(Brand___1, ProductID___1, Brand___2, ProductID___2, resp_count_pct___1_2, confidence___2_1, confidence___1_2)
-select Brand___1, ProductID___1, Brand___2, ProductID___2, resp_count_pct___1_2, confidence___2_1, confidence___1_2
-from tmp_eag.bby_allpurch_202301_basket_analysis;
+insert into tmp_eag.basket_analysis_lbls(BrandID___1, ItemID___1, BrandID___2, ItemID___2, resp_count_pct___1_2, confidence___2_1, confidence___1_2)
+select BrandID___1, ItemID___1, BrandID___2, ItemID___2, resp_count_pct___1_2, confidence___2_1, confidence___1_2
+from tmp_eag.basket_analysis;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis_lbl as a, (
-	select FormatValue as ProductID___1, FormatLabel as lbl_ProductID___1
+update tmp_eag.basket_analysis_lbls as a, (
+	select FormatValue as ItemID___1, FormatLabel as lbl_ItemID___1
 	from tq_admin.vw_formats where FormatID = 109
 ) as b
-set a.lbl_ProductID___1 = b.lbl_ProductID___1
-where a.ProductID___1=b.ProductID___1;
+set a.lbl_ItemID___1 = b.lbl_ItemID___1
+where a.ItemID___1=b.ItemID___1;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis_lbl as a, (
-	select FormatValue as ProductID___2, FormatLabel as lbl_ProductID___2
+update tmp_eag.basket_analysis_lbls as a, (
+	select FormatValue as ItemID___2, FormatLabel as lbl_ItemID___2
 	from tq_admin.vw_formats where FormatID = 109
 ) as b
-set a.lbl_ProductID___2 = b.lbl_ProductID___2
-where a.ProductID___2=b.ProductID___2;
+set a.lbl_ItemID___2 = b.lbl_ItemID___2
+where a.ItemID___2=b.ItemID___2;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis_lbl as a, (
-	select FormatValue as Brand___1, FormatLabel as lbl_Brand___1
+update tmp_eag.basket_analysis_lbls as a, (
+	select FormatValue as BrandID___1, FormatLabel as lbl_BrandID___1
 	from tq_admin.vw_formats where FormatID = 1298
 ) as b
-set a.lbl_Brand___1 = b.lbl_Brand___1
-where a.Brand___1=b.Brand___1;
+set a.lbl_BrandID___1 = b.lbl_BrandID___1
+where a.BrandID___1=b.BrandID___1;
 
-update tmp_eag.bby_allpurch_202301_basket_analysis_lbl as a, (
-	select FormatValue as Brand___2, FormatLabel as lbl_Brand___2
+update tmp_eag.basket_analysis_lbls as a, (
+	select FormatValue as BrandID___2, FormatLabel as lbl_BrandID___2
 	from tq_admin.vw_formats where FormatID = 1298
 ) as b
-set a.lbl_Brand___2 = b.lbl_Brand___2
-where a.Brand___2=b.Brand___2;
+set a.lbl_BrandID___2 = b.lbl_BrandID___2
+where a.BrandID___2=b.BrandID___2;

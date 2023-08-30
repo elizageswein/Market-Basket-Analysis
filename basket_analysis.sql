@@ -6,6 +6,7 @@ performs market basket analysis on sample store transaction database (src: https
 
 */
 
+-- import data in CSV file
 drop table if exists tmp_eag.transactions;
 create table tmp_eag.transactions(
 	﻿MONTH varchar(3) 
@@ -33,7 +34,7 @@ with
 go;
 
 
-
+-- all unique item, brands
 drop table if exists tmp_eag.products;
 create table tmp_eag.products
 (
@@ -48,6 +49,7 @@ select ITEM_ID, BRAND_ID
 from tmp_eag.transactions
 group by ITEM_ID, BRAND_ID;
 
+-- all possible item, brand combinations
 drop table if exists tmp_eag.product_combinations;
 create table tmp_eag.product_combinations
 (
@@ -83,7 +85,7 @@ where BrandID___1=BrandID___2
 
 optimize local table tmp_eag.product_combinations;
 
-
+-- remove duplicate combinations
 drop table if exists tmp_eag.product_combinations_nodups;
 create table tmp_eag.product_combinations_nodups
 (
@@ -110,7 +112,7 @@ group by BrandID_min, ItemID_min, BrandID_max, ItemID_max;
 optimize local table tmp_eag.product_combinations_nodups;
 
 
--- group by 1, 2, get count, divide by transaction total
+-- count of transactions that included items 1 and 2
 drop table if exists tmp_eag.product_combination_transactions;
 create table tmp_eag.product_combination_transactions
 (
@@ -166,6 +168,7 @@ insert into tmp_eag.basket_analysis(BrandID___1, ItemID___1, BrandID___2, ItemID
 select BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_count
 from tmp_eag.product_combination_transactions;
 
+-- count of transactions that included item 1
 update tmp_eag.basket_analysis as a,
 (
 	select BrandID, ItemID, count(TransactionID) as transaction_count___1
@@ -176,6 +179,7 @@ set a.transaction_count___1 = b.transaction_count___1
 where a.ItemID___1 = b.ItemID
 	and a.BrandID___1 = b.BrandID;
 
+-- count of transactions that included item 2
 update tmp_eag.basket_analysis as a,
 (
 	select BrandID, ItemID, count(TransactionID) as transaction_count___2
@@ -186,6 +190,7 @@ set a.transaction_count___2 = b.transaction_count___2
 where a.ItemID___2 = b.ItemID
 	and a.BrandID___2 = b.BrandID;
 
+-- total transaction count
 update tmp_eag.basket_analysis as a,
 (
 	select count(distinct TransactionID) as transaction_count_total
@@ -193,24 +198,29 @@ update tmp_eag.basket_analysis as a,
 ) as b
 set a.transaction_count_total = b.transaction_count_total;
 
+-- support for item 1
 update tmp_eag.basket_analysis
 set support___1 = transaction_count___1/transaction_count_total * 100;
 
+-- support for item 2
 update tmp_eag.basket_analysis
 set support___2 = transaction_count___2/transaction_count_total * 100;
 
+-- support for item 1, item 2 combination
 update tmp_eag.basket_analysis
 set support___1_2 = transaction_count/transaction_count_total * 100;
 
 -- P(ItemID___2 | ItemID___1)
+-- probability of item 2 being in a transaction if item 1 is in transaction
 update tmp_eag.basket_analysis
 set confidence___2_if_1 = support___1_2 / support___1;
 
 -- P(ItemID___1 | ItemID___2)
+-- probability of item 1 being in transaction if item 2 is in transaction
 update tmp_eag.basket_analysis
 set confidence___1_if_2 = support___1_2 / support___2;
 
-
+-- add item and brand labels
 drop table if exists tmp_eag.basket_analysis_lbls;
 create table tmp_eag.basket_analysis_lbls
 (

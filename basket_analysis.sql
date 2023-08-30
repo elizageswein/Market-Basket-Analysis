@@ -146,11 +146,11 @@ create table tmp_eag.basket_analysis
     , ItemID___2 int(3)
     , transaction_count_total int(3) default 0
     , transaction_count___1 int(3) default 0
-    , transaction_pct___1 decimal(19,6) default 0
+    , support___1 decimal(19,6) default 0
     , transaction_count___2 int(3) default 0
-    , transaction_pct___2 decimal(19,6) default 0
+    , support___2 decimal(19,6) default 0
     , transaction_count int(3) default 0
-    , transaction_pct___1_2 decimal(19,6) default 0
+    , support___1_2 decimal(19,6) default 0
     , confidence___2_if_1 decimal(19,6) default 0
     , confidence___1_if_2 decimal(19,6) default 0
     , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
@@ -194,21 +194,21 @@ update tmp_eag.basket_analysis as a,
 set a.transaction_count_total = b.transaction_count_total;
 
 update tmp_eag.basket_analysis
-set transaction_pct___1 = transaction_count___1/transaction_count_total * 100;
+set support___1 = transaction_count___1/transaction_count_total * 100;
 
 update tmp_eag.basket_analysis
-set transaction_pct___2 = transaction_count___2/transaction_count_total * 100;
+set support___2 = transaction_count___2/transaction_count_total * 100;
 
 update tmp_eag.basket_analysis
-set transaction_pct___1_2 = transaction_count/transaction_count_total * 100;
+set support___1_2 = transaction_count/transaction_count_total * 100;
 
 -- P(ItemID___2 | ItemID___1)
 update tmp_eag.basket_analysis
-set confidence___2_if_1 = transaction_pct___1_2 / transaction_pct___1;
+set confidence___2_if_1 = support___1_2 / support___1;
 
 -- P(ItemID___1 | ItemID___2)
 update tmp_eag.basket_analysis
-set confidence___1_if_2 = transaction_pct___1_2 / transaction_pct___2;
+set confidence___1_if_2 = support___1_2 / support___2;
 
 
 drop table if exists tmp_eag.basket_analysis_lbls;
@@ -224,7 +224,7 @@ create table tmp_eag.basket_analysis_lbls
     , Brand_lbl___2 varchar(64)
     , ItemID___2 int(3)
     , ItemID_lbl___2 varchar(64)
-    , transaction_pct___1_2 decimal(6,3) default 0
+    , support___1_2 decimal(6,3) default 0
     , confidence___2_if_1 decimal(6,3) default 0
     , confidence___1_if_2 decimal(6,3) default 0
     , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
@@ -236,8 +236,8 @@ create table tmp_eag.basket_analysis_lbls
     , index idx_o2(BrandID___2)
 );
 
-insert into tmp_eag.basket_analysis_lbls(BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_pct___1_2, confidence___2_if_1, confidence___1_if_2)
-select BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_pct___1_2, confidence___2_if_1, confidence___1_if_2
+insert into tmp_eag.basket_analysis_lbls(BrandID___1, ItemID___1, BrandID___2, ItemID___2, support___1_2, confidence___2_if_1, confidence___1_if_2)
+select BrandID___1, ItemID___1, BrandID___2, ItemID___2, support___1_2, confidence___2_if_1, confidence___1_if_2
 from tmp_eag.basket_analysis;
 
 update tmp_eag.basket_analysis_lbls as a, (

@@ -8,31 +8,53 @@ performs market basket analysis on sample store transaction database (src: https
 
 drop table if exists tmp_eag.transactions;
 create table tmp_eag.transactions(
-	Month int(11)
-    , TransactionID bigint(20)
-    , ItemID int(11)
-    , BrandID int(11)
-    , Qty int(11) default 0
-    , primary key (Month, TransactionID, ItemID)
-    , index idx_ibt(ItemID, BrandID, TransactionID)
-    , index idx_bi(BrandID, ItemID)
-    , index idx_b(BrandID)
-    , index idx_t(TransactionID)
-    , index idx_i(ItemID));
+	﻿MONTH varchar(3) 
+	,DAY int(3)
+	,TRANSACTION_ID varchar(4)
+	,TRANSACTION_AMT decimal(6,2)
+	,QTY int(3)
+	,PRICE decimal(6,2)
+	,ITEM varchar(64)
+	,ITEM_ID int(3)
+	,BRAND varchar(64)
+	,BRAND_ID int(3)
+	, primary key (TRANSACTION_ID)
+	, index idx_tib(TRANSACTION_ID, ITEM_ID, BRAND_ID)
+	, index idx_ib(ITEM_ID, BRAND_ID)
+);
 
-insert into tmp_eag.transactions(Month, TransactionID, Outlet, ItemID, BrandID, Qty)
-;
+bulk insert into tmp_eag.transactions
+from 'transactions_sample.csv'
+with
+(
+	format='CSV'
+	firstrow=2
+)
+go;
 
-optimize local table tmp_eag.transactions;
+
+
+drop table if exists tmp_eag.products;
+create table tmp_eag.products
+(
+	ITEM_ID int(3)
+	, BRAND_ID int(3)
+	, primary key (ITEM_ID, BRAND_ID)
+	, index idx_ib(ITEM_ID, BRAND_ID)
+);
+
+insert into tmp_eag.products(ITEM_ID, BRAND_ID)
+select ITEM_ID, BRAND_ID
+from tmp_eag.transactions
+group by ITEM_ID, BRAND_ID;
 
 drop table if exists tmp_eag.product_combinations;
 create table tmp_eag.product_combinations
 (
-Month int(11)
-    , BrandID___1 int(11)
-    , ItemID___1 int(11)
-    , BrandID___2 int(11)
-    , ItemID___2 int(11)
+    BrandID___1 int(3)
+    , ItemID___1 int(3)
+    , BrandID___2 int(3)
+    , ItemID___2 int(3)
     , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
     , index idx_bi1bi2(BrandID___1, ItemID___1, BrandID___2, ItemID___2)
     , index idx_i1(ItemID___1)
@@ -41,25 +63,23 @@ Month int(11)
     , index idx_b2(BrandID___2)
 );
 
--- takes 160 seconds
 insert into tmp_eag.product_combinations(BrandID___1, ItemID___1, BrandID___2, ItemID___2)
 select a.BrandID, a.ItemID as ItemID___1, b.BrandID, b.ItemID as ItemID___2
 from
 (
 	select ItemID, BrandID
-	from tmp_eag.transactions
-    	group by ItemID, BrandID
+	from tmp_eag.products
 ) as a cross join
 (
 	select ItemID, BrandID
-	from tmp_eag.transactions
-    	group by ItemID, BrandID
+	from tmp_eag.products
 ) as b
 group by a.ItemID, a.BrandID, b.ItemID, b.BrandID;
 
 -- remove duplicate combinations
 delete from tmp_eag.product_combinations
-where BrandID___1=BrandID___2 and ItemID___1=ItemID___2;
+where BrandID___1=BrandID___2
+	and ItemID___1=ItemID___2;
 
 optimize local table tmp_eag.product_combinations;
 
@@ -67,10 +87,10 @@ optimize local table tmp_eag.product_combinations;
 drop table if exists tmp_eag.product_combinations_nodups;
 create table tmp_eag.product_combinations_nodups
 (
-    BrandID___1 int(11)
-    , ItemID___1 int(11)
-    , BrandID___2 int(11)
-    , ItemID___2 int(11)
+    BrandID___1 int(3)
+    , ItemID___1 int(3)
+    , BrandID___2 int(3)
+    , ItemID___2 int(3)
     , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
     , index idx_oone (BrandID___1)
     , index idx_otwo (BrandID___2)
@@ -94,16 +114,16 @@ optimize local table tmp_eag.product_combinations_nodups;
 drop table if exists tmp_eag.product_combination_transactions;
 create table tmp_eag.product_combination_transactions
 (
-    BrandID___1 int(11)
-    , ItemID___1 int(11)
-    , BrandID___2 int(11)
-    , ItemID___2 int(11)
-    , transaction_count int(11)
+    BrandID___1 int(3)
+    , ItemID___1 int(3)
+    , BrandID___2 int(3)
+    , ItemID___2 int(3)
+    , transaction_count int(3)
     , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
 );
 
 insert into tmp_eag.product_combination_transactions(BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_count)
-select a.BrandID, a.ItemID, b.BrandID, b.ItemID, count(a.TransactionID)
+select a.Brand_ID, a.Item_ID, b.Brand_ID, b.Item_ID, count(a.TransactionID)
 from tmp_eag.transactions as a, 
 tmp_eag.transactions as b, 
 tmp_eag.product_combinations_nodups as c
@@ -118,18 +138,18 @@ group by a.BrandID, a.ItemID, b.BrandID, b.ItemID;
 drop table if exists tmp_eag.basket_analysis;
 create table tmp_eag.basket_analysis
 (
-	Month int(11) default 202301
-    , Outlet int(11) default 13
-    , BrandID___1 int(11)
-    , ItemID___1 int(11)
-    , BrandID___2 int(11)
-    , ItemID___2 int(11)
-    , transaction_count_total int(11) default 0
-    , transaction_count___1 int(11) default 0
+	Month int(3) default 202301
+    , Outlet int(3) default 13
+    , BrandID___1 int(3)
+    , ItemID___1 int(3)
+    , BrandID___2 int(3)
+    , ItemID___2 int(3)
+    , transaction_count_total int(3) default 0
+    , transaction_count___1 int(3) default 0
     , transaction_pct___1 decimal(19,6) default 0
-    , transaction_count___2 int(11) default 0
+    , transaction_count___2 int(3) default 0
     , transaction_pct___2 decimal(19,6) default 0
-    , transaction_count int(11) default 0
+    , transaction_count int(3) default 0
     , transaction_pct___1_2 decimal(19,6) default 0
     , confidence___2_if_1 decimal(19,6) default 0
     , confidence___1_if_2 decimal(19,6) default 0
@@ -194,15 +214,15 @@ set confidence___1_if_2 = transaction_pct___1_2 / transaction_pct___2;
 drop table if exists tmp_eag.basket_analysis_lbls;
 create table tmp_eag.basket_analysis_lbls
 (
-	Month int(11) default 202301
-    , Outlet int(11) default 13
-    , BrandID___1 int(11)
+	Month int(3) default 202301
+    , Outlet int(3) default 13
+    , BrandID___1 int(3)
     , Brand_lbl___1 varchar(64)
-    , ItemID___1 int(11)
+    , ItemID___1 int(3)
     , ItemID_lbl___1 varchar(64)
-    , BrandID___2 int(11)
+    , BrandID___2 int(3)
     , Brand_lbl___2 varchar(64)
-    , ItemID___2 int(11)
+    , ItemID___2 int(3)
     , ItemID_lbl___2 varchar(64)
     , transaction_pct___1_2 decimal(6,3) default 0
     , confidence___2_if_1 decimal(6,3) default 0

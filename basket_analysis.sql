@@ -1,75 +1,18 @@
 [8/30 3:28 PM] Eliza Geswein
-
 -- Eliza Geswein
-
 -- 08/2023
 
  
-
 /*
-
-performs market basket analysis on sample store Transaction database (src: https://www.kaggle.com/datasets/iamprateek/store-Transaction-data)
-
- 
-
+performs market basket analysis on sample store Transaction database
+	(src: https://www.kaggle.com/datasets/iamprateek/store-Transaction-data)
 */
 
- 
 
--- import data in CSV file
-
-drop table if exists tmp_eag.Transactions;
-
-create table tmp_eag.Transactions(
-
-    ﻿MONTH varchar(3) 
-
-    ,DAY int(11)
-
-    ,Transaction_ID varchar(4)
-
-    ,Transaction_AMT decimal(6,2)
-
-    ,QTY int(11)
-
-    ,PRICE decimal(6,2)
-
-    ,Item varchar(64)
-
-    ,ITEM_ID int(11)
-
-    ,Brand varchar(64)
-
-    ,Brand_ID int(11)
-
-    , primary key (Transaction_ID)
-
-    , index idx_tib(Transaction_ID, ITEM_ID, Brand_ID)
-
-    , index idx_i(ITEM_ID)
-
-);
-
- 
-
-bulk insert into tmp_eag.Transactions
-
-from 'Transactions_sample.csv'
-
-with
-
-(
-
-    format='CSV'
-
-    firstrow=2
-
-)
-
-go;
+-- data in CSV file imported into table tmp_eag.transactions
 
 -- filter to only what we need
--- get column of integer part of TransactionID for indexing
+-- get integer part of TransactionID for indexing
 drop table if exists tmp_eag.transactions_sample;
 create table tmp_eag.transactions_sample
 (
@@ -87,8 +30,6 @@ select TRANSACTION_ID, substring(TRANSACTION_ID, 2) as TRANSACTION_ID_NUM, ITEM,
 from tmp_eag.transactions
 group by TRANSACTION_ID, ITEM_ID;
 
-select TRANSACTION_ID, substring(TRANSACTION_ID, 2) as TRANSACTION_ID_NUM
-from tmp_eag.transactions;
 
 -- get unique items
  drop table if exists tmp_eag.items;
@@ -156,6 +97,7 @@ where a.TRANSACTION_ID_NUM=b.TRANSACTION_ID_NUM
     and b.ITEM_ID=c.ITEM_ID___2
 group by a.ITEM_ID, b.ITEM_ID;
 
+-- perform market basket analysis
 drop table if exists tmp_eag.basket_analysis;
 create table tmp_eag.basket_analysis
 (
@@ -180,7 +122,6 @@ select ITEM_ID___1, ITEM_ID___2, Transaction_count
 from tmp_eag.item_combination_Transactions;
 
  
-
 -- count of Transactions that included Item 1
 update tmp_eag.basket_analysis as a,
 (
@@ -227,6 +168,9 @@ set support___2 = Transaction_count___2/Transaction_count_total;
 update tmp_eag.basket_analysis
 set support___1_2 = Transaction_count___1_2/Transaction_count_total;
 
+-- remove rows with no correlation
+delete from tmp_eag.basket_analysis
+where support___1_2 = 0;
  
  -- confidence
 -- P(ITEM_ID___2 | ITEM_ID___1)
@@ -267,6 +211,4 @@ where a.ITEM_ID___1 = b.ITEM_ID;
 update tmp_eag.basket_analysis_lbls as a, tmp_eag.transactions_sample as b
 set a.ITEM___2 = b.ITEM
 where a.ITEM_ID___2 = b.ITEM_ID;
-
-select * From tmp_eag.basket_analysis_lbls order by support___1_2 desc;
 

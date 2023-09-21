@@ -110,8 +110,8 @@ create table tmp_eag.basket_analysis
     , support___2 decimal(6,3) default 0
     , Transaction_count___1_2 int(11) default 0
     , support___1_2 decimal(6,3) default 0
-    , confidence___2_if_1 decimal(6,3) default 0
     , confidence___1_if_2 decimal(6,3) default 0
+    , confidence___2_if_1 decimal(6,3) default 0
     , primary key (ITEM_ID___1, ITEM_ID___2)
     , index idx_i1(ITEM_ID___1)
     , index idx_i2 (ITEM_ID___2)
@@ -173,15 +173,15 @@ delete from tmp_eag.basket_analysis
 where support___1_2 = 0;
  
  -- confidence
--- P(ITEM_ID___2 | ITEM_ID___1)
--- probability of Item 2 being in a Transaction if Item 1 is in Transaction
-update tmp_eag.basket_analysis
-set confidence___2_if_1 = support___1_2 / support___1;
-
 -- P(ITEM_ID___1 | ITEM_ID___2)
 -- probability of Item 1 being in Transaction if Item 2 is in Transaction
 update tmp_eag.basket_analysis
 set confidence___1_if_2 = support___1_2 / support___2;
+
+-- P(ITEM_ID___2 | ITEM_ID___1)
+-- probability of Item 2 being in a Transaction if Item 1 is in Transaction
+update tmp_eag.basket_analysis
+set confidence___2_if_1 = support___1_2 / support___1;
 
  
 -- add Item labels
@@ -195,14 +195,15 @@ create table tmp_eag.basket_analysis_lbls
     , support___1 decimal(6,3) default 0
     , support___2 decimal(6,3) default 0
     , support___1_2 decimal(6,3) default 0
-    , confidence___2_if_1 decimal(6,3) default 0
     , confidence___1_if_2 decimal(6,3) default 0
+    , confidence___2_if_1 decimal(6,3) default 0
     , primary key (ITEM_ID___1, ITEM_ID___2)
 );
 
-insert into tmp_eag.basket_analysis_lbls(ITEM_ID___1, ITEM_ID___2, support___1, support___2, support___1_2, confidence___2_if_1, confidence___1_if_2)
-select ITEM_ID___1, ITEM_ID___2, support___1, support___2, support___1_2, confidence___2_if_1, confidence___1_if_2
-from tmp_eag.basket_analysis;
+insert into tmp_eag.basket_analysis_lbls(ITEM_ID___1, ITEM_ID___2, support___1, support___2, support___1_2, confidence___1_if_2, confidence___2_if_1)
+select ITEM_ID___1, ITEM_ID___2, support___1, support___2, support___1_2, confidence___1_if_2, confidence___2_if_1
+from tmp_eag.basket_analysis
+order by support___1_2 desc;
 
 update tmp_eag.basket_analysis_lbls as a, tmp_eag.transactions_sample as b
 set a.ITEM___1 = b.ITEM

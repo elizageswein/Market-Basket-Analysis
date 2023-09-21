@@ -1,279 +1,272 @@
+[8/30 3:28 PM] Eliza Geswein
+
 -- Eliza Geswein
+
 -- 08/2023
 
+ 
+
 /*
-performs market basket analysis on sample store transaction database (src: https://www.kaggle.com/datasets/iamprateek/store-transaction-data)
+
+performs market basket analysis on sample store Transaction database (src: https://www.kaggle.com/datasets/iamprateek/store-Transaction-data)
+
+ 
 
 */
 
+ 
+
 -- import data in CSV file
-drop table if exists tmp_eag.transactions;
-create table tmp_eag.transactions(
-	﻿MONTH varchar(3) 
-	,DAY int(3)
-	,TRANSACTION_ID varchar(4)
-	,TRANSACTION_AMT decimal(6,2)
-	,QTY int(3)
-	,PRICE decimal(6,2)
-	,ITEM varchar(64)
-	,ITEM_ID int(3)
-	,BRAND varchar(64)
-	,BRAND_ID int(3)
-	, primary key (TRANSACTION_ID)
-	, index idx_tib(TRANSACTION_ID, ITEM_ID, BRAND_ID)
-	, index idx_ib(ITEM_ID, BRAND_ID)
+
+drop table if exists tmp_eag.Transactions;
+
+create table tmp_eag.Transactions(
+
+    ﻿MONTH varchar(3) 
+
+    ,DAY int(11)
+
+    ,Transaction_ID varchar(4)
+
+    ,Transaction_AMT decimal(6,2)
+
+    ,QTY int(11)
+
+    ,PRICE decimal(6,2)
+
+    ,Item varchar(64)
+
+    ,ITEM_ID int(11)
+
+    ,Brand varchar(64)
+
+    ,Brand_ID int(11)
+
+    , primary key (Transaction_ID)
+
+    , index idx_tib(Transaction_ID, ITEM_ID, Brand_ID)
+
+    , index idx_i(ITEM_ID)
+
 );
 
-bulk insert into tmp_eag.transactions
-from 'transactions_sample.csv'
+ 
+
+bulk insert into tmp_eag.Transactions
+
+from 'Transactions_sample.csv'
+
 with
+
 (
-	format='CSV'
-	firstrow=2
+
+    format='CSV'
+
+    firstrow=2
+
 )
+
 go;
 
-
--- all unique item, brands
-drop table if exists tmp_eag.products;
-create table tmp_eag.products
+-- filter to only what we need
+-- get column of integer part of TransactionID for indexing
+drop table if exists tmp_eag.transactions_sample;
+create table tmp_eag.transactions_sample
 (
-	ITEM_ID int(3)
-	, BRAND_ID int(3)
-	, primary key (ITEM_ID, BRAND_ID)
-	, index idx_ib(ITEM_ID, BRAND_ID)
+	TRANSACTION_ID varchar(4)
+    , TRANSACTION_ID_NUM int(11)
+    , ITEM varchar(64)
+    , ITEM_ID int(11)
+    , primary key (TRANSACTION_ID_NUM, ITEM_ID)
+    , index idx_i (ITEM_ID)
+    , index idx_t (TRANSACTION_ID_NUM)
 );
 
-insert into tmp_eag.products(ITEM_ID, BRAND_ID)
-select ITEM_ID, BRAND_ID
+insert into tmp_eag.transactions_sample(TRANSACTION_ID, TRANSACTION_ID_NUM, Item, ITEM_ID)
+select TRANSACTION_ID, substring(TRANSACTION_ID, 2) as TRANSACTION_ID_NUM, ITEM, ITEM_ID
 from tmp_eag.transactions
-group by ITEM_ID, BRAND_ID;
+group by TRANSACTION_ID, ITEM_ID;
 
--- all possible item, brand combinations
-drop table if exists tmp_eag.product_combinations;
-create table tmp_eag.product_combinations
-(
-    BrandID___1 int(3)
-    , ItemID___1 int(3)
-    , BrandID___2 int(3)
-    , ItemID___2 int(3)
-    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
-    , index idx_bi1bi2(BrandID___1, ItemID___1, BrandID___2, ItemID___2)
-    , index idx_i1(ItemID___1)
-    , index idx_i2(ItemID___2)
-    , index idx_b1(BrandID___1)
-    , index idx_b2(BrandID___2)
+select TRANSACTION_ID, substring(TRANSACTION_ID, 2) as TRANSACTION_ID_NUM
+from tmp_eag.transactions;
+
+-- get unique items
+ drop table if exists tmp_eag.items;
+ create table tmp_eag.items
+ (
+	ITEM_ID int(11)
+    , primary key (ITEM_ID)
 );
 
-insert into tmp_eag.product_combinations(BrandID___1, ItemID___1, BrandID___2, ItemID___2)
-select a.BrandID, a.ItemID as ItemID___1, b.BrandID, b.ItemID as ItemID___2
+insert into tmp_eag.items(ITEM_ID)
+select distinct ITEM_ID
+from tmp_eag.transactions_sample;
+
+ 
+-- all possible Item, Brand combinations
+drop table if exists tmp_eag.item_combinations;
+create table tmp_eag.item_combinations
+(
+    ITEM_ID___1 int(11)
+    , ITEM_ID___2 int(11)
+    , primary key (ITEM_ID___1, ITEM_ID___2)
+	, index idx_i1(ITEM_ID___1)
+    , index idx_i2(ITEM_ID___2)
+);
+
+-- items table w index used to optimize cross join - takes .031 seconds vs. > 1 min from transactions_sample table
+insert into tmp_eag.item_combinations(ITEM_ID___1, ITEM_ID___2)
+select a.ITEM_ID as ITEM_ID___1, b.ITEM_ID as ITEM_ID___2
 from
 (
-	select ItemID, BrandID
-	from tmp_eag.products
+    select ITEM_ID
+    from tmp_eag.items
 ) as a cross join
 (
-	select ItemID, BrandID
-	from tmp_eag.products
+    select ITEM_ID
+    from tmp_eag.items
 ) as b
-group by a.ItemID, a.BrandID, b.ItemID, b.BrandID;
+group by a.ITEM_ID, b.ITEM_ID;
 
 -- remove duplicate combinations
-delete from tmp_eag.product_combinations
-where BrandID___1=BrandID___2
-	and ItemID___1=ItemID___2;
+delete from tmp_eag.item_combinations
+where ITEM_ID___1 >= ITEM_ID___2;
 
-optimize local table tmp_eag.product_combinations;
+-- reset indexes
+optimize local table tmp_eag.item_combinations;
 
--- remove duplicate combinations
-drop table if exists tmp_eag.product_combinations_nodups;
-create table tmp_eag.product_combinations_nodups
+ 
+-- count of Transactions that included Items 1 and 2
+drop table if exists tmp_eag.item_combination_Transactions;
+create table tmp_eag.item_combination_Transactions
 (
-    BrandID___1 int(3)
-    , ItemID___1 int(3)
-    , BrandID___2 int(3)
-    , ItemID___2 int(3)
-    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
-    , index idx_oone (BrandID___1)
-    , index idx_otwo (BrandID___2)
-    , index idx_pone (ItemID___1)
-    , index idx_ptwo (ItemID___2)
-    , index idx_oopp (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
+    ITEM_ID___1 int(11)
+    , ITEM_ID___2 int(11)
+    , Transaction_count int(11)
+    , primary key (ITEM_ID___1, ITEM_ID___2)
 );
 
-insert into tmp_eag.product_combinations_nodups(BrandID___1, ItemID___1, BrandID___2, ItemID___2)
-select (case when BrandID___1 < BrandID___2 then BrandID___1 else BrandID___2 end) as BrandID_min,
-	(case when ItemID___1 < ItemID___2 then ItemID___1 else ItemID___2 end) as ItemID_min,
-    (case when BrandID___1 > BrandID___2 then BrandID___1 else BrandID___2 end) as BrandID_max,
-    (case when ItemID___1 > ItemID___2 then ItemID___1 else ItemID___2 end) as ItemID_max
-from tmp_eag.product_combinations
-group by BrandID_min, ItemID_min, BrandID_max, ItemID_max;
-
-optimize local table tmp_eag.product_combinations_nodups;
-
-
--- count of transactions that included items 1 and 2
-drop table if exists tmp_eag.product_combination_transactions;
-create table tmp_eag.product_combination_transactions
-(
-    BrandID___1 int(3)
-    , ItemID___1 int(3)
-    , BrandID___2 int(3)
-    , ItemID___2 int(3)
-    , transaction_count int(3)
-    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
-);
-
-insert into tmp_eag.product_combination_transactions(BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_count)
-select a.Brand_ID, a.Item_ID, b.Brand_ID, b.Item_ID, count(a.TransactionID)
-from tmp_eag.transactions as a, 
-tmp_eag.transactions as b, 
-tmp_eag.product_combinations_nodups as c
-where a.TransactionID=b.TransactionID
-    and a.BrandID=c.BrandID___1
-    and a.ItemID=c.ItemID___1
-    and b.BrandID=c.BrandID___2
-    and b.ItemID=c.ItemID___2
-group by a.BrandID, a.ItemID, b.BrandID, b.ItemID;
-
+insert into tmp_eag.item_combination_Transactions(ITEM_ID___1, ITEM_ID___2, Transaction_count)
+select a.ITEM_ID, b.ITEM_ID, count(a.TRANSACTION_ID_NUM)
+from tmp_eag.transactions_sample as a, 
+tmp_eag.transactions_sample as b, 
+tmp_eag.item_combinations as c
+where a.TRANSACTION_ID_NUM=b.TRANSACTION_ID_NUM
+    and a.ITEM_ID=c.ITEM_ID___1
+    and b.ITEM_ID=c.ITEM_ID___2
+group by a.ITEM_ID, b.ITEM_ID;
 
 drop table if exists tmp_eag.basket_analysis;
 create table tmp_eag.basket_analysis
 (
-	Month int(3) default 202301
-    , Outlet int(3) default 13
-    , BrandID___1 int(3)
-    , ItemID___1 int(3)
-    , BrandID___2 int(3)
-    , ItemID___2 int(3)
-    , transaction_count_total int(3) default 0
-    , transaction_count___1 int(3) default 0
-    , support___1 decimal(19,6) default 0
-    , transaction_count___2 int(3) default 0
-    , support___2 decimal(19,6) default 0
-    , transaction_count int(3) default 0
-    , support___1_2 decimal(19,6) default 0
-    , confidence___2_if_1 decimal(19,6) default 0
-    , confidence___1_if_2 decimal(19,6) default 0
-    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
-    , index idx_op1(BrandID___1, ItemID___1)
-    , index idx_op2 (BrandID___2, ItemID___2)
-    , index idx_p1(ItemID___1)
-    , index idx_p2(ItemID___2)
-    , index idx_o1(BrandID___1)
-    , index idx_o2(BrandID___2)
-);
-    
-insert into tmp_eag.basket_analysis(BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_count)
-select BrandID___1, ItemID___1, BrandID___2, ItemID___2, transaction_count
-from tmp_eag.product_combination_transactions;
-
--- count of transactions that included item 1
-update tmp_eag.basket_analysis as a,
-(
-	select BrandID, ItemID, count(TransactionID) as transaction_count___1
-	from tmp_eag.transactions
-    group by BrandID, ItemID
-) as b
-set a.transaction_count___1 = b.transaction_count___1
-where a.ItemID___1 = b.ItemID
-	and a.BrandID___1 = b.BrandID;
-
--- count of transactions that included item 2
-update tmp_eag.basket_analysis as a,
-(
-	select BrandID, ItemID, count(TransactionID) as transaction_count___2
-	from tmp_eag.transactions
-    group by BrandID, ItemID
-) as b
-set a.transaction_count___2 = b.transaction_count___2
-where a.ItemID___2 = b.ItemID
-	and a.BrandID___2 = b.BrandID;
-
--- total transaction count
-update tmp_eag.basket_analysis as a,
-(
-	select count(distinct TransactionID) as transaction_count_total
-	from tmp_eag.transactions
-) as b
-set a.transaction_count_total = b.transaction_count_total;
-
--- support for item 1
-update tmp_eag.basket_analysis
-set support___1 = transaction_count___1/transaction_count_total * 100;
-
--- support for item 2
-update tmp_eag.basket_analysis
-set support___2 = transaction_count___2/transaction_count_total * 100;
-
--- support for item 1, item 2 combination
-update tmp_eag.basket_analysis
-set support___1_2 = transaction_count/transaction_count_total * 100;
-
--- P(ItemID___2 | ItemID___1)
--- probability of item 2 being in a transaction if item 1 is in transaction
-update tmp_eag.basket_analysis
-set confidence___2_if_1 = support___1_2 / support___1;
-
--- P(ItemID___1 | ItemID___2)
--- probability of item 1 being in transaction if item 2 is in transaction
-update tmp_eag.basket_analysis
-set confidence___1_if_2 = support___1_2 / support___2;
-
--- add item and brand labels
-drop table if exists tmp_eag.basket_analysis_lbls;
-create table tmp_eag.basket_analysis_lbls
-(
-	Month int(3) default 202301
-    , Outlet int(3) default 13
-    , BrandID___1 int(3)
-    , Brand_lbl___1 varchar(64)
-    , ItemID___1 int(3)
-    , ItemID_lbl___1 varchar(64)
-    , BrandID___2 int(3)
-    , Brand_lbl___2 varchar(64)
-    , ItemID___2 int(3)
-    , ItemID_lbl___2 varchar(64)
+    ITEM_ID___1 int(11)
+    , ITEM_ID___2 int(11)
+    , Transaction_count_total int(11) default 0
+    , Transaction_count___1 int(11) default 0
+    , support___1 decimal(6,3) default 0
+    , Transaction_count___2 int(11) default 0
+    , support___2 decimal(6,3) default 0
+    , Transaction_count___1_2 int(11) default 0
     , support___1_2 decimal(6,3) default 0
     , confidence___2_if_1 decimal(6,3) default 0
     , confidence___1_if_2 decimal(6,3) default 0
-    , primary key (BrandID___1, ItemID___1, BrandID___2, ItemID___2)
-    , index idx_op1(BrandID___1, ItemID___1)
-    , index idx_op2 (BrandID___2, ItemID___2)
-    , index idx_p1(ItemID___1)
-    , index idx_p2(ItemID___2)
-    , index idx_o1(BrandID___1)
-    , index idx_o2(BrandID___2)
+    , primary key (ITEM_ID___1, ITEM_ID___2)
+    , index idx_i1(ITEM_ID___1)
+    , index idx_i2 (ITEM_ID___2)
 );
 
-insert into tmp_eag.basket_analysis_lbls(BrandID___1, ItemID___1, BrandID___2, ItemID___2, support___1_2, confidence___2_if_1, confidence___1_if_2)
-select BrandID___1, ItemID___1, BrandID___2, ItemID___2, support___1_2, confidence___2_if_1, confidence___1_if_2
+insert into tmp_eag.basket_analysis(ITEM_ID___1, ITEM_ID___2, Transaction_count___1_2)
+select ITEM_ID___1, ITEM_ID___2, Transaction_count
+from tmp_eag.item_combination_Transactions;
+
+ 
+
+-- count of Transactions that included Item 1
+update tmp_eag.basket_analysis as a,
+(
+    select ITEM_ID, count(TRANSACTION_ID_NUM) as Transaction_count___1
+    from tmp_eag.transactions_sample
+    group by ITEM_ID
+
+) as b
+set a.Transaction_count___1 = b.Transaction_count___1
+where a.ITEM_ID___1 = b.ITEM_ID;
+
+ 
+-- count of Transactions that included Item 2
+update tmp_eag.basket_analysis as a,
+(
+    select ITEM_ID, count(TRANSACTION_ID_NUM) as Transaction_count___2
+    from tmp_eag.transactions_sample
+    group by ITEM_ID
+
+) as b
+set a.Transaction_count___2 = b.Transaction_count___2
+where a.ITEM_ID___2 = b.ITEM_ID;
+
+
+-- total Transaction count
+update tmp_eag.basket_analysis as a,
+(
+    select count(distinct TRANSACTION_ID_NUM) as Transaction_count_total
+    from tmp_eag.transactions_sample
+) as b
+set a.Transaction_count_total = b.Transaction_count_total;
+
+
+-- support
+-- pct of transactions that include Item 1
+update tmp_eag.basket_analysis
+set support___1 = Transaction_count___1/Transaction_count_total;
+
+-- pct of transactions that include Item 2
+update tmp_eag.basket_analysis
+set support___2 = Transaction_count___2/Transaction_count_total;
+
+-- pct of transactions that included Item 1 & Item 2
+update tmp_eag.basket_analysis
+set support___1_2 = Transaction_count___1_2/Transaction_count_total;
+
+ 
+ -- confidence
+-- P(ITEM_ID___2 | ITEM_ID___1)
+-- probability of Item 2 being in a Transaction if Item 1 is in Transaction
+update tmp_eag.basket_analysis
+set confidence___2_if_1 = support___1_2 / support___1;
+
+-- P(ITEM_ID___1 | ITEM_ID___2)
+-- probability of Item 1 being in Transaction if Item 2 is in Transaction
+update tmp_eag.basket_analysis
+set confidence___1_if_2 = support___1_2 / support___2;
+
+ 
+-- add Item labels
+drop table if exists tmp_eag.basket_analysis_lbls;
+create table tmp_eag.basket_analysis_lbls
+(
+    ITEM___1 varchar(64)
+    , ITEM_ID___1 int(11)
+    , ITEM___2 varchar(64)
+    , ITEM_ID___2 int(11)
+    , support___1 decimal(6,3) default 0
+    , support___2 decimal(6,3) default 0
+    , support___1_2 decimal(6,3) default 0
+    , confidence___2_if_1 decimal(6,3) default 0
+    , confidence___1_if_2 decimal(6,3) default 0
+    , primary key (ITEM_ID___1, ITEM_ID___2)
+);
+
+insert into tmp_eag.basket_analysis_lbls(ITEM_ID___1, ITEM_ID___2, support___1, support___2, support___1_2, confidence___2_if_1, confidence___1_if_2)
+select ITEM_ID___1, ITEM_ID___2, support___1, support___2, support___1_2, confidence___2_if_1, confidence___1_if_2
 from tmp_eag.basket_analysis;
 
-update tmp_eag.basket_analysis_lbls as a, (
-	select FormatValue as ItemID___1, FormatLabel as ItemID_lbl___1
-	from tq_admin.vw_formats where FormatID = 109
-) as b
-set a.ItemID_lbl___1 = b.ItemID_lbl___1
-where a.ItemID___1=b.ItemID___1;
+update tmp_eag.basket_analysis_lbls as a, tmp_eag.transactions_sample as b
+set a.ITEM___1 = b.ITEM
+where a.ITEM_ID___1 = b.ITEM_ID;
 
-update tmp_eag.basket_analysis_lbls as a, (
-	select FormatValue as ItemID___2, FormatLabel as ItemID_lbl___2
-	from tq_admin.vw_formats where FormatID = 109
-) as b
-set a.ItemID_lbl___2 = b.ItemID_lbl___2
-where a.ItemID___2=b.ItemID___2;
+update tmp_eag.basket_analysis_lbls as a, tmp_eag.transactions_sample as b
+set a.ITEM___2 = b.ITEM
+where a.ITEM_ID___2 = b.ITEM_ID;
 
-update tmp_eag.basket_analysis_lbls as a, (
-	select FormatValue as BrandID___1, FormatLabel as Brand_lbl___1
-	from tq_admin.vw_formats where FormatID = 1298
-) as b
-set a.Brand_lbl___1 = b.Brand_lbl___1
-where a.BrandID___1=b.BrandID___1;
+select * From tmp_eag.basket_analysis_lbls order by support___1_2 desc;
 
-update tmp_eag.basket_analysis_lbls as a, (
-	select FormatValue as BrandID___2, FormatLabel as Brand_lbl___2
-	from tq_admin.vw_formats where FormatID = 1298
-) as b
-set a.Brand_lbl___2 = b.Brand_lbl___2
-where a.BrandID___2=b.BrandID___2;

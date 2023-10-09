@@ -44,7 +44,7 @@ select distinct ITEM_ID
 from tmp_eag.transactions_sample;
 
  
--- all possible Item, Brand combinations
+-- all possible Item combinations
 drop table if exists tmp_eag.item_combinations;
 create table tmp_eag.item_combinations
 (

@@ -189,9 +189,7 @@ drop table if exists tmp_eag.basket_analysis_lbls;
 create table tmp_eag.basket_analysis_lbls
 (
     ITEM___1 varchar(64)
-    , ITEM_ID___1 int(11)
     , ITEM___2 varchar(64)
-    , ITEM_ID___2 int(11)
     , support___1 decimal(6,3) default 0
     , support___2 decimal(6,3) default 0
     , support___1_2 decimal(6,3) default 0
@@ -200,16 +198,12 @@ create table tmp_eag.basket_analysis_lbls
     , primary key (ITEM_ID___1, ITEM_ID___2)
 );
 
-insert into tmp_eag.basket_analysis_lbls(ITEM_ID___1, ITEM_ID___2, support___1, support___2, support___1_2, confidence___1_if_2, confidence___2_if_1)
-select ITEM_ID___1, ITEM_ID___2, support___1, support___2, support___1_2, confidence___1_if_2, confidence___2_if_1
-from tmp_eag.basket_analysis
+-- adds labels for items
+insert into tmp_eag.basket_analysis_lbls(ITEM___1, ITEM___2, support___1, support___2, support___1_2, confidence___1_if_2, confidence___2_if_1)
+select b.ITEM as ITEM___1, c.ITEM as ITEM___2, a.support___1, a.support___2, a.support___1_2, a.confidence___1_if_2, a.confidence___2_if_1
+from tmp_eag.basket_analysis as a,
+	tmp_eag.transactions_sample as b,
+	tmp_eag.transactions_sample as c
+where a.ITEM_ID___1 = b.ITEM_ID
+	and a.ITEM_ID___2 = c.ITEM_ID
 order by support___1_2 desc;
-
-update tmp_eag.basket_analysis_lbls as a, tmp_eag.transactions_sample as b
-set a.ITEM___1 = b.ITEM
-where a.ITEM_ID___1 = b.ITEM_ID;
-
-update tmp_eag.basket_analysis_lbls as a, tmp_eag.transactions_sample as b
-set a.ITEM___2 = b.ITEM
-where a.ITEM_ID___2 = b.ITEM_ID;
-
